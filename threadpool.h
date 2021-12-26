@@ -12,13 +12,13 @@ namespace concurency
 	class threadPool final
 	{
 	public:
-		threadPool(size_t n);
-		threadPool(const std::vector<int> affinity); // TODO
+		threadPool() = default;
 		~threadPool() { end(); }
 
 		size_t threadNum()const { return _threads.size(); }
 
-		void start();
+		void start(size_t numThreads);
+		void start(const std::vector<int>& affinity);
 		void end();
 
 		void push(std::function<void()> func);

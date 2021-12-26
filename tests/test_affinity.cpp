@@ -5,7 +5,7 @@
 int main(int argc, char* argv[])
 {
 	concurency::threadPool tp;
-	tp.start(5);
+	tp.start({1, 2, -1, -1, 5});
 
 	int res = testCommon::testThreadpool(tp);
 	return res;
