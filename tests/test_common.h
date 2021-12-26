@@ -30,7 +30,7 @@ struct testCommon
 				tp.push(func);
 		};
 
-		// start pusher threads, wait till all threads are up, 
+		// start pusher threads, wait till all threads are up, signal to start pushing
 		std::vector<std::thread> pushersThreads;
 		for (size_t i = 0; i < 10; i++)
 			pushersThreads.push_back(std::thread{ pusher, 1024 });
@@ -42,13 +42,15 @@ struct testCommon
 			if (pushersThreads[i].joinable())
 				pushersThreads[i].join();
 
+		const auto numThreads = tp.threadNum();
+
 		// must end the threadpool threads here
 		// because mutex in func above can be destroyed
 		// while the func is still being executed inside the tp
 		tp.end();
 
 		// check that funcs were executed from different threads
-		if (ids.size() == tp.threadNum())
+		if (ids.size() == numThreads)
 			return 0;
 		return -1;
 	}

@@ -63,7 +63,7 @@ void threadPool::start(const std::vector<int>& affinity)
 void threadPool::end()
 {
 	_end.store(true);
-	for (size_t i = 0; i < _threads.size() * 2; ++i)
+	for (size_t i = 0; i < threadNum() * 2; ++i)
 	{
 		push([]() {}); // wake up threads
 	}
@@ -72,9 +72,11 @@ void threadPool::end()
 		if (_threads[i].joinable())
 			_threads[i].join();
 	}
+	_queue.clear();
+	_threads.clear();
 }
 
-void threadPool::push(std::function<void()> func)
+void threadPool::push(const std::function<void()>& func)
 {
 	_queue.push_back(func);
 }
