@@ -11,11 +11,17 @@ add_executable(${TEST_BASIC} test_basic.cpp ${COMMON_SOURCES})
 set(TEST_AFFINITY test_affinity)
 add_executable(${TEST_AFFINITY} test_affinity.cpp ${COMMON_SOURCES})
 
+set(TEST_ORDERED test_ordered)
+add_executable(${TEST_ORDERED} test_ordered.cpp ${COMMON_SOURCES})
+
+set(exes ${TEST_BASIC} ${TEST_AFFINITY} ${TEST_ORDERED})
+
 if (UNIX)
-target_link_libraries(${TEST_BASIC} pthread)
-target_link_libraries(${TEST_AFFINITY} pthread)
+foreach (exe IN LISTS exes)
+	target_link_libraries(${exe} pthread)
+endforeach()
 endif()
 
-add_test(${TEST_BASIC} ${TEST_BASIC})
-add_test(${TEST_AFFINITY} ${TEST_AFFINITY})
-
+foreach (exe IN LISTS exes)
+	add_test(${exe} ${exe})
+endforeach()

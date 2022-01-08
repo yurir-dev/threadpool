@@ -5,11 +5,13 @@
 #include <set>
 #include <future>
 #include <atomic>
+#include <thread>
 
 struct testCommon
 {
 	// returns 0 on success, -1 on failure
-	static int testThreadpool(concurency::threadPool& tp)
+	template<typename ThreadPool_t>
+	static int testThreadpool(ThreadPool_t& tp)
 	{
 		std::set<std::thread::id> ids;
 		std::mutex m;

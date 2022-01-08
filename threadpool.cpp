@@ -1,6 +1,11 @@
 #include "threadpool.h"
 #include <iostream>
+#include <random>
+#include <limits>
+#include <stdexcept>
+
 #if defined(_WIN32)
+#define NOMINMAX
 #include <windows.h>
 #elif defined (linux)
 #if !defined(_GNU_SOURCE)
@@ -78,5 +83,75 @@ void threadPool::end()
 
 void threadPool::push(const std::function<void()>& func)
 {
+	if (_threads.size() == 0)
+		throw std::logic_error("no available threads");
 	_queue.push_back(func);
+}
+
+
+
+void threadPoolOrdered::worker::start(std::atomic<bool>& end)
+{
+	auto f = [this, &end]() {
+		if (_affinity >= 0)
+			setAffinity(_affinity);
+		while (!end.load())
+		{
+			auto task = _queue.pop_front();
+			task();
+		}
+	};
+	_thread = std::thread{ f };
+}
+void threadPoolOrdered::worker::end()
+{
+	if (_thread.joinable())
+	{
+		_queue.push_back([]() {});
+		_thread.join();
+	}
+	_queue.clear();
+}
+void threadPoolOrdered::worker::push(const std::function<void()>& func)
+{
+	_queue.push_back(func);
+}
+
+
+void threadPoolOrdered::start(size_t numThreads)
+{
+	std::vector<int> affinity;
+	affinity.resize(numThreads);
+	std::fill(affinity.begin(), affinity.end(), -1);
+	start(affinity);
+}
+
+void threadPoolOrdered::start(const std::vector<int>& affinity)
+{
+	_end.store(false);
+	_workers.reserve(affinity.size());
+	for (int a : affinity)
+		_workers.emplace_back(a).start(_end);
+}
+void threadPoolOrdered::end()
+{
+	_end.store(true);
+	for (auto& w : _workers)
+		w.end();
+	_workers.clear();
+}
+
+void threadPoolOrdered::push(const std::function<void()>& func)
+{
+	std::random_device rd;
+	std::mt19937 gen(rd()); 
+	std::uniform_int_distribution<uint32_t> distrib(0, std::numeric_limits<uint32_t>::max());
+
+	push(func, distrib(gen));
+}
+void threadPoolOrdered::push(const std::function<void()>& func, uint32_t hash)
+{
+	if (_workers.size() == 0)
+		throw std::logic_error("no available workers");
+	_workers[hash % _workers.size()].push(func);
 }

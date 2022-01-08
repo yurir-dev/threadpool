@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
 	for (size_t i = 1; i < afinities.size(); i += 1)
 	{
 		tp.start(afinities[i]); // tp.end() is called inside testThreadpool
-		if (int res = testCommon::testThreadpool(tp) != 0)
+		if (int res = testCommon::testThreadpool<concurency::threadPool>(tp) != 0)
 			return res;
 	}
 	

@@ -12,8 +12,12 @@ namespace concurency
 	{
 	public:
 		threadsafe_queue() = default;
-		threadsafe_queue(const threadsafe_queue& rHnd);
+		threadsafe_queue(const threadsafe_queue& rHnd)noexcept;
+		threadsafe_queue(threadsafe_queue&& rHnd)noexcept;
 		~threadsafe_queue() = default;
+
+		threadsafe_queue& operator=(const threadsafe_queue& rHnd)noexcept;
+		threadsafe_queue& operator=(threadsafe_queue&& rHnd)noexcept;
 
 		// blocking functions
 		T& front();
@@ -36,12 +40,40 @@ namespace concurency
 
 
 	template <typename T>
-	threadsafe_queue<T>::threadsafe_queue(const threadsafe_queue& rHnd)
+	threadsafe_queue<T>::threadsafe_queue(const threadsafe_queue& rHnd) noexcept
 	{
 		std::unique_lock<std::mutex> mlock(rHnd._mutex);
 		_queue = rHnd._queue;
 	}
+	template <typename T>
+	threadsafe_queue<T>::threadsafe_queue(threadsafe_queue&& rHnd) noexcept
+	{
+		std::unique_lock<std::mutex> mlock(rHnd._mutex);
+		_queue = std::move(rHnd._queue);
+	}
 
+	template <typename T>
+	threadsafe_queue<T>& threadsafe_queue<T>::operator=(const threadsafe_queue& rHnd) noexcept
+	{
+		if (this != &rHnd)
+		{
+			std::unique_lock<std::mutex> mlock(rHnd._mutex);
+			std::unique_lock<std::mutex> mlock1(rHnd._mutex);
+			_queue = rHnd._queue;
+
+		}return *this;
+	}
+	template <typename T>
+	threadsafe_queue<T>& threadsafe_queue<T>::operator=(threadsafe_queue&& rHnd) noexcept
+	{
+		if (this != &rHnd)
+		{
+			std::unique_lock<std::mutex> mlock(_mutex);
+			std::unique_lock<std::mutex> mlock1(rHnd._mutex);
+			_queue = std::move(rHnd._queue);
+		}
+		return *this;
+	}
 	template <typename T>
 	T& threadsafe_queue<T>::front()
 	{
@@ -51,17 +83,6 @@ namespace concurency
 			_cond.wait(mlock);
 		}
 		return _queue.front();
-	}
-
-	template <typename T>
-	void threadsafe_queue<T>::clear()
-	{
-		std::unique_lock<std::mutex> mlock(_mutex);
-		while (!_queue.empty())
-		{
-			_queue.pop_front();
-		}
-		assert(_queue.empty());
 	}
 
 	template <typename T>
@@ -132,4 +153,14 @@ namespace concurency
 		return size() == 0;
 	}
 
+	template <typename T>
+	void threadsafe_queue<T>::clear()
+	{
+		std::unique_lock<std::mutex> mlock(_mutex);
+		while (!_queue.empty())
+		{
+			_queue.pop_front();
+		}
+		assert(_queue.empty());
+	}
 }
