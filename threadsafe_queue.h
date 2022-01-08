@@ -94,7 +94,7 @@ namespace concurency
 			_cond.wait(mlock);
 		}
 
-		T n = _queue.front();
+		T n = std::move(_queue.front());
 		_queue.pop_front();
 		return n;
 	}
