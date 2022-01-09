@@ -14,7 +14,10 @@ add_executable(${TEST_AFFINITY} test_affinity.cpp ${COMMON_SOURCES})
 set(TEST_ORDERED test_ordered)
 add_executable(${TEST_ORDERED} test_ordered.cpp ${COMMON_SOURCES})
 
-set(exes ${TEST_BASIC} ${TEST_AFFINITY} ${TEST_ORDERED})
+set(TEST_FUTURE test_future)
+add_executable(${TEST_FUTURE} test_future.cpp ${COMMON_SOURCES})
+
+set(exes ${TEST_BASIC} ${TEST_AFFINITY} ${TEST_ORDERED} ${TEST_FUTURE})
 
 if (UNIX)
 foreach (exe IN LISTS exes)
