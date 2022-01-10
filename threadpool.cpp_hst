@@ -1,0 +1,228 @@
+#include "threadpool.h"
+#include <iostream>
+#include <random>
+#include <limits>
+#include <stdexcept>
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#elif defined (linux)
+#if !defined(_GNU_SOURCE)
+#define _GNU_SOURCE             /* See feature_test_macros(7) */
+#endif
+#include <pthread.h>
+#else
+#warning "thread pinning is not supported for this OS"
+#endif
+
+using namespace concurency;
+
+static void setAffinity(int cpuNum)
+{
+#if defined(_WIN32)
+	DWORD mask = (1 << cpuNum);
+	HANDLE th = GetCurrentThread();
+	DWORD_PTR prev_mask = SetThreadAffinityMask(th, mask);
+#elif defined (linux)
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(cpuNum, &cpuset);
+	int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+	if (rc != 0) {
+		std::cerr << "Error calling pthread_setaffinity_np: " << rc << std::endl;
+	}
+#else
+	std::cerr << "thread pinning is not supported for this OS" << std::endl;
+#endif
+}
+
+void threadPool::start(size_t numThreads)
+{
+	std::vector<int> affinity;
+	affinity.resize(numThreads);
+	std::fill(affinity.begin(), affinity.end(), -1);
+	start(affinity);
+}
+void threadPool::start(const std::vector<int>& affinity)
+{
+	auto thread_func = [this](int affinity) {
+
+		if (affinity >= 0)
+			setAffinity(affinity);
+
+		while (!_end.load())
+		{
+			auto task = _queue.pop_front();
+			task();
+		}
+	};
+
+	_end.store(false);
+	_threads.resize(affinity.size());
+	for (size_t i = 0; i < _threads.size(); ++i)
+	{
+		_threads[i] = std::thread{ thread_func, affinity[i] };
+	}
+}
+void threadPool::end()
+{
+	_end.store(true);
+	for (size_t i = 0; i < threadNum() * 2; ++i)
+	{
+		push([]() {}); // wake up threads
+	}
+	for (size_t i = 0; i < _threads.size(); ++i)
+	{
+		if (_threads[i].joinable())
+			_threads[i].join();
+	}
+	_queue.clear();
+	_threads.clear();
+}
+
+void threadPool::push(const std::function<void()>& func)
+{
+	if (_threads.size() == 0)
+		throw std::logic_error("no available threads");
+	_queue.push_back(func);
+}
+
+
+
+void threadPoolOrdered::worker::start(std::atomic<bool>& end)
+{
+	auto f = [this, &end]() {
+		if (_affinity >= 0)
+			setAffinity(_affinity);
+		while (!end.load())
+		{
+			auto task = _queue.pop_front();
+			task();
+		}
+	};
+	_thread = std::thread{ f };
+}
+void threadPoolOrdered::worker::end()
+{
+	if (_thread.joinable())
+	{
+		_queue.push_back([]() {});
+		_thread.join();
+	}
+	_queue.clear();
+}
+void threadPoolOrdered::worker::push(const std::function<void()>& func)
+{
+	_queue.push_back(func);
+}
+
+
+void threadPoolOrdered::start(size_t numThreads)
+{
+	std::vector<int> affinity;
+	affinity.resize(numThreads);
+	std::fill(affinity.begin(), affinity.end(), -1);
+	start(affinity);
+}
+
+void threadPoolOrdered::start(const std::vector<int>& affinity)
+{
+	_end.store(false);
+	_workers.reserve(affinity.size());
+	for (int a : affinity)
+		_workers.emplace_back(a).start(_end);
+}
+void threadPoolOrdered::end()
+{
+	_end.store(true);
+	for (auto& w : _workers)
+		w.end();
+	_workers.clear();
+}
+
+void threadPoolOrdered::push(const std::function<void()>& func)
+{
+	std::random_device rd;
+	std::mt19937 gen(rd()); 
+	std::uniform_int_distribution<uint32_t> distrib(0, std::numeric_limits<uint32_t>::max());
+
+	push(func, distrib(gen));
+}
+void threadPoolOrdered::push(const std::function<void()>& func, uint32_t hash)
+{
+	if (_workers.size() == 0)
+		throw std::logic_error("no available workers");
+	_workers[hash % _workers.size()].push(func);
+}
+
+
+#if 1
+void threadPoolOrderedFuture::worker::start(std::atomic<bool>& end)
+{
+	auto f = [this, &end]() {
+		if (_affinity >= 0)
+			setAffinity(_affinity);
+		while (!end.load())
+		{
+			auto task = _queue.pop_front();
+			task();
+		}
+	};
+	_thread = std::thread{ f };
+}
+void threadPoolOrderedFuture::worker::end()
+{
+	if (_thread.joinable())
+	{
+		_queue.push_back(task_t{ []() {return std::shared_ptr<taskRet_t>(); } });
+		_thread.join();
+	}
+	_queue.clear();
+}
+void threadPoolOrderedFuture::worker::push(task_t&& t)
+{
+	_queue.push_back(std::forward<task_t>(t));
+}
+
+
+void threadPoolOrderedFuture::start(size_t numThreads)
+{
+	std::vector<int> affinity;
+	affinity.resize(numThreads);
+	std::fill(affinity.begin(), affinity.end(), -1);
+	start(affinity);
+}
+
+void threadPoolOrderedFuture::start(const std::vector<int>& affinity)
+{
+	_end.store(false);
+	_workers.reserve(affinity.size());
+	for (int a : affinity)
+		_workers.emplace_back(a).start(_end);
+}
+void threadPoolOrderedFuture::end()
+{
+	_end.store(true);
+	for (auto& w : _workers)
+		w.end();
+	_workers.clear();
+}
+
+void threadPoolOrderedFuture::push(task_t&& t)
+{
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<uint32_t> distrib(0, std::numeric_limits<uint32_t>::max());
+
+	push(std::forward<task_t>(t), distrib(gen));
+}
+void threadPoolOrderedFuture::push(task_t&& t, uint32_t hash)
+{
+	if (_workers.size() == 0)
+		throw std::logic_error("no available workers");
+	_workers[hash % _workers.size()].push(std::forward<task_t>(t));
+}
+#endif
+
+

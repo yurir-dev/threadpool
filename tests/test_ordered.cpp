@@ -18,7 +18,7 @@ int test(size_t numThreads)
 		std::cout << "random thread " << std::this_thread::get_id() << std::endl;
 	};
 
-	concurency::threadPoolOrdered tp;
+	concurency::threadPool<void> tp;
 	tp.start(numThreads);
 
 	std::random_device rd;
