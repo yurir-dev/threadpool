@@ -2,12 +2,10 @@
 
 #include <thread>
 #include <vector>
-#include <functional>
-#include <atomic>
 #include <future>
 #include <random>
 #include <limits>
-#include <memory>
+#include <iostream>
 
 #include "threadsafe_queue.h"
 
@@ -132,6 +130,9 @@ namespace concurency
 	template<typename Ret_t>
 	void threadPool<Ret_t>::start(size_t numThreads)
 	{
+		if (numThreads == 0)
+			throw std::invalid_argument("numThreads can't be 0");
+
 		std::vector<int> affinity;
 		affinity.resize(numThreads);
 		std::fill(affinity.begin(), affinity.end(), -1);
@@ -141,6 +142,11 @@ namespace concurency
 	template<typename Ret_t>
 	void threadPool<Ret_t>::start(const std::vector<int>& affinity)
 	{
+		if (affinity.size() == 0)
+			throw std::invalid_argument("numThreads can't be 0");
+
+		end();
+
 		_end.store(false);
 		_workers.reserve(affinity.size());
 		for (int a : affinity)
@@ -173,4 +179,36 @@ namespace concurency
 			throw std::logic_error("no available workers");
 		return _workers[hash % _workers.size()].push(std::forward<task_t>(t));
 	}
+}
+
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#elif defined (linux)
+#if !defined(_GNU_SOURCE)
+#define _GNU_SOURCE             /* See feature_test_macros(7) */
+#endif
+#include <pthread.h>
+#else
+#warning "thread pinning is not supported for this OS"
+#endif
+
+void concurency::setAffinity(int cpuNum)
+{
+#if defined(_WIN32)
+	DWORD mask = (1 << cpuNum);
+	HANDLE th = GetCurrentThread();
+	DWORD_PTR prev_mask = SetThreadAffinityMask(th, mask);
+#elif defined (linux)
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(cpuNum, &cpuset);
+	int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+	if (rc != 0) {
+		std::cerr << "Error calling pthread_setaffinity_np: " << rc << std::endl;
+	}
+#else
+	std::cerr << "thread pinning is not supported for this OS" << std::endl;
+#endif
 }

@@ -1,6 +1,5 @@
-#include "threadpool.h"
+#include "tp/threadpool.h"
 
-#include "../threadpool.h"
 #include "test_common.h"
 
 #include <chrono>

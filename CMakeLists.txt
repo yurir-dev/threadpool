@@ -10,7 +10,7 @@ project(${PROJECT_NAME})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-set (SOURCES main.cpp threadsafe_queue.h threadpool.h threadpool.cpp)
+set (SOURCES main.cpp tp/threadsafe_queue.h tp/threadpool.h)
 
 # add the executable
 add_executable(${EXE_NAME} ${SOURCES})
