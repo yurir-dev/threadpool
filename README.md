@@ -12,6 +12,9 @@ Threadpool implementation in C++, it keeps several threads on hold and accepts s
 4) threadpool is templated on the return type, all tasks will return same type, it's possible to wait for it or just ignore it.
 
 
+developed and tested on Microsoft Visual Studio Community 2019, Version 16.9.4 and windows10 Ubuntu.
+
+
 All the code is in tp/threadpool.h tp/threadsafe_queue.h
 usage examples are in tests/test_*.cpp
 
