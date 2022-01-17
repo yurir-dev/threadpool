@@ -18,15 +18,16 @@ developed and tested on Microsoft Visual Studio Community 2019, Version 16.9.4 a
 All the code is in tp/threadpool.h tp/threadsafe_queue.h
 usage examples are in tests/test_*.cpp
 
-
+------------------------------------------------------------------------------------------------------------
 
 from tests/test_interface.cpp
 
 
- // define threadpool that accepts std::function<bool()> 
+ // define threadpool that accepts std::function\<bool()>
+ 
  // start it with 3 threads
 
-using tp_t = concurency::threadPool<bool>;
+using tp_t = concurency::threadPool\<bool>;
 
 tp_t tp;
 
@@ -35,9 +36,9 @@ tp.start(3);
 
 // push some tasks, wait for return value of one of them
 
-tp.push([]() { return true; });
+tp.push(\[]() { return true; });
 
-std::future<bool> f1 = tp.push([]() { return true; }, 1);
+std::future\<bool> f1 = tp.push(\[]() { return true; }, 1);
 
 bool res1 = f1.get();
 
@@ -47,7 +48,7 @@ bool res1 = f1.get();
 tp.end();
 
 
-
+------------------------------------------------------------------------------------------------------------
 
 // restart threadpool with 4 threads, threads 1, 2 and 4 are not pinned, thread 3 will be pinned on core 2
 
@@ -56,9 +57,9 @@ tp.start({-1, -1, 2, -1});
 
 // push some tasks, wait for return value of one of them
 
-tp.push([]() { return true; });
+tp.push(\[]() { return true; });
 
-std::future<bool> f2 = tp.push([]() { return true; }, 1024);
+std::future<bool> f2 = tp.push(\[]() { return true; }, 1024);
 
 bool res2 = f2.get();
 
