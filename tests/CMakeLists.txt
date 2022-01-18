@@ -24,8 +24,11 @@ add_executable(${TEST_FUTURE} test_future.cpp ${COMMON_SOURCES})
 set(TEST_INTERFACE test_interface)
 add_executable(${TEST_INTERFACE} test_interface.cpp ${COMMON_SOURCES})
 
+set(TEST_RACECOND test_raceCond)
+add_executable(${TEST_RACECOND} test_raceCond.cpp ${COMMON_SOURCES})
 
-set(exes ${TEST_BASIC} ${TEST_AFFINITY} ${TEST_ORDERED} ${TEST_FUTURE} ${TEST_INTERFACE})
+
+set(exes ${TEST_BASIC} ${TEST_AFFINITY} ${TEST_ORDERED} ${TEST_FUTURE} ${TEST_INTERFACE} ${TEST_RACECOND})
 
 if (UNIX)
 foreach (exe IN LISTS exes)

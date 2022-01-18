@@ -6,6 +6,7 @@
 #include <random>
 #include <limits>
 #include <iostream>
+#include <shared_mutex>
 
 #include "threadsafe_queue.h"
 
@@ -29,17 +30,25 @@ namespace concurency
 		job1 ----> queue 1 -> thread1
 		job2 ----> queue 2 -> thread2
 		job3 ----> queue 3 -> thread3
+
+		the max number of thread is fixed to avoid resizing of internal vector of workers,
+		if push() happens before start() or after end() an std::logic_error exception maybe thrown.
+		all API functions are 100% thread safe.
 	*/
-	template<typename Ret_t>
+	template<typename Ret_t, size_t maxNumThreads = 128>
 	class threadPool final
 	{
 	public:
 		typedef std::function<Ret_t()> task_t;
 
-		threadPool() = default;
+		threadPool()
+		{
+			_workers.resize(maxNumThreads);
+		}
 		~threadPool() { end(); }
 
-		size_t threadNum()const { return _workers.size(); }
+		size_t threadNum()const { return _threadNum.load(); }
+		constexpr size_t maxThreadNum()const { return maxNumThreads; }
 
 		/*
 			start(5) - starts 5 threads
@@ -54,7 +63,7 @@ namespace concurency
 			blocking
 			threads won't accept new tasks, pool will wait untill all current tasks are done.
 		*/
-		void end(); // finishes all the threads and cleans the task queue
+		void end(); // finishes all the threads and cleans the task queues
 
 		// returns future return of the func, so caller can wait for it or just ignore it
 		std::future<Ret_t> push(task_t&& func); // random thread will handle it
@@ -84,8 +93,10 @@ namespace concurency
 			worker& operator=(const worker&) = delete;
 		};
 
+		std::atomic<size_t> _threadNum{0};	// number of current active workers
 		std::vector<worker> _workers;
-		std::atomic<bool> _end{ true };
+		std::atomic<bool> _end{ true };		// a flag for all workers
+		std::shared_mutex _mtx;				// used to sync start/end and pushers
 
 		threadPool(const threadPool&) = delete;
 		threadPool(const threadPool&&) = delete;
@@ -93,33 +104,39 @@ namespace concurency
 		threadPool& operator=(const threadPool&&) = delete;
 	};
 
-	template<typename Ret_t>
-	void threadPool<Ret_t>::worker::start(std::atomic<bool>& end)
+	template<typename Ret_t, size_t maxNumThreads>
+	void threadPool<Ret_t, maxNumThreads>::worker::start(std::atomic<bool>& endFlag)
 	{
-		auto f = [this, &end]() {
+		auto f = [this, &endFlag]() {
 			if (_affinity >= 0)
 				setAffinity(_affinity);
-			while (!end.load())
+			while (!endFlag.load())
 			{
 				auto task = std::move(_queue.pop_front());
-				if(task.valid())
-					task();
+				task();
 			}
+
+			while (!_queue.empty())
+			{
+				auto task = std::move(_queue.pop_front());
+				task();
+			}
+
 		};
+		end();
 		_thread = std::thread{ f };
 	}
-	template<typename Ret_t>
-	void threadPool<Ret_t>::worker::end()
+	template<typename Ret_t, size_t maxNumThreads>
+	void threadPool<Ret_t, maxNumThreads>::worker::end()
 	{
 		if (_thread.joinable())
 		{
 			_queue.push_back(std::packaged_task<Ret_t()>([]() {return Ret_t(); }));
 			_thread.join();
 		}
-		_queue.clear();
 	}
-	template<typename Ret_t>
-	std::future<Ret_t> threadPool<Ret_t>::worker::push(task_t&& t)
+	template<typename Ret_t, size_t maxNumThreads>
+	std::future<Ret_t> threadPool<Ret_t, maxNumThreads>::worker::push(task_t&& t)
 	{
 		auto pt = std::packaged_task<Ret_t()>(t);
 		auto future = pt.get_future();
@@ -127,8 +144,8 @@ namespace concurency
 		return future;
 	}
 
-	template<typename Ret_t>
-	void threadPool<Ret_t>::start(size_t numThreads)
+	template<typename Ret_t, size_t maxNumThreads>
+	void threadPool<Ret_t, maxNumThreads>::start(size_t numThreads)
 	{
 		if (numThreads == 0)
 			throw std::invalid_argument("numThreads can't be 0");
@@ -139,31 +156,39 @@ namespace concurency
 		start(affinity);
 	}
 
-	template<typename Ret_t>
-	void threadPool<Ret_t>::start(const std::vector<int>& affinity)
+	template<typename Ret_t, size_t maxNumThreads>
+	void threadPool<Ret_t, maxNumThreads>::start(const std::vector<int>& affinity)
 	{
 		if (affinity.size() == 0)
-			throw std::invalid_argument("numThreads can't be 0");
+			throw std::invalid_argument("requested numThreads can't be 0");
+		if (affinity.size() > maxNumThreads)
+			throw std::invalid_argument("requested numThreads can't be greater than maxNumThreads");
 
-		end();
+		std::lock_guard<std::shared_mutex> lock(_mtx);
 
 		_end.store(false);
-		_workers.reserve(affinity.size());
-		for (int a : affinity)
-			_workers.emplace_back(a).start(_end);
+		for (size_t i = 0; i < affinity.size(); ++i)
+		{
+			auto& w = _workers[i];
+			w.setCpuAffinity(affinity[i]);
+			w.start(_end);
+		}
+		_threadNum.store(affinity.size());
 	}
 
-	template<typename Ret_t>
-	void threadPool<Ret_t>::end()
+	template<typename Ret_t, size_t maxNumThreads>
+	void threadPool<Ret_t, maxNumThreads>::end()
 	{
+		std::lock_guard<std::shared_mutex> lock(_mtx);
+
+		const size_t threadNum = _threadNum.exchange(0);
 		_end.store(true);
-		for (auto& w : _workers)
-			w.end();
-		_workers.clear();
+		for (size_t i = 0; i < threadNum; ++i)
+			_workers[i].end();
 	}
 
-	template<typename Ret_t>
-	std::future<Ret_t> threadPool<Ret_t>::push(task_t&& t)
+	template<typename Ret_t, size_t maxNumThreads>
+	std::future<Ret_t> threadPool<Ret_t, maxNumThreads>::push(task_t&& t)
 	{
 		std::random_device rd;
 		std::mt19937 gen(rd());
@@ -172,12 +197,16 @@ namespace concurency
 		return push(std::forward<task_t>(t), distrib(gen));
 	}
 
-	template<typename Ret_t>
-	std::future<Ret_t> threadPool<Ret_t>::push(task_t&& t, uint32_t hash)
+	template<typename Ret_t, size_t maxNumThreads>
+	std::future<Ret_t> threadPool<Ret_t, maxNumThreads>::push(task_t&& t, uint32_t hash)
 	{
-		if (_workers.size() == 0)
+		// multiple pushers can enter, they will wait only when start/end is called
+		std::shared_lock<std::shared_mutex> sharedLock(_mtx);
+
+		const size_t n{ threadNum() };
+		if (n == 0)
 			throw std::logic_error("no available workers");
-		return _workers[hash % _workers.size()].push(std::forward<task_t>(t));
+		return _workers[hash % n].push(std::forward<task_t>(t));
 	}
 }
 
