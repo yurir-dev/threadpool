@@ -1,6 +1,6 @@
 # threadpool
 
-Threadpool implementation in C++, it keeps several threads on hold and accepts std::function<T()> to execute in the context of one of these threads.
+Threadpool implementation in C++17, it keeps several threads on hold and accepts std::function<T()> to execute in the context of one of these threads.
 
 1) during idle time threads don't waste cpu time, they wait for task using condition_variable.
 
