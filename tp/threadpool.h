@@ -228,7 +228,7 @@ void concurency::setAffinity(int cpuNum)
 #if defined(_WIN32)
 	DWORD mask = (1 << cpuNum);
 	HANDLE th = GetCurrentThread();
-	DWORD_PTR prev_mask = SetThreadAffinityMask(th, mask);
+	/*DWORD_PTR prev_mask =*/ SetThreadAffinityMask(th, mask);
 #elif defined (linux)
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
