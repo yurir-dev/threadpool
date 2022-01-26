@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-int main(int argc, char* argv[])
+int main(int /*argc*/, char* /*argv*/[])
 {
 	using tp_t = concurency::threadPool<bool>;
 	tp_t tp;

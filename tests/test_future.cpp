@@ -42,8 +42,10 @@ int testTpWithFutures(size_t numThreads)
 	}
 
 	for (auto& f : futures)
+	{
 		Ret_t ret = f.get();
-
+		ret = ret; // compiler warning error
+	}
 	tp.end();
 
 	if (tids.size() != numThreads)
@@ -128,7 +130,7 @@ int testTpNoFutures(size_t numThreads)
 
 	return static_cast<int>(numThreads) - static_cast<int>(tids.size());
 }
-int main(int argc, char* argv[])
+int main(int /*argc*/, char* /*argv*/[])
 {
 	for (size_t i : {1, 2, 3, 4, 5})
 	{

@@ -47,7 +47,7 @@ int test(size_t numThreads)
 }
 
 
-int main(int argc, char* argv[])
+int main(int /*argc*/, char* /*argv*/[])
 {
 	for (size_t n : {1, 2, 3, 4, 5})
 		test(n);

@@ -3,7 +3,7 @@
 #include "test_common.h"
 
 
-int main(int argc, char* argv[])
+int main(int /*argc*/, char* /*argv*/[])
 {
 	using tp_t = concurency::threadPool<void> ;
 	tp_t tp;
