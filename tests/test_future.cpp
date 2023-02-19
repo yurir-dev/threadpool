@@ -28,7 +28,7 @@ int testTpWithFutures(size_t numThreads)
 		auto tid = std::this_thread::get_id();
 		{
 			std::unique_lock<std::mutex> mlock(m);
-			std::cout << "executed from thread: " << tid << std::endl;
+			//std::cout << "executed from thread: " << tid << std::endl;
 			tids.insert(tid);
 
 		}return Ret_t();
@@ -63,7 +63,7 @@ int testTpWithFutures<testTaskRet_t>(size_t numThreads)
 
 	auto func = []() {
 		auto tid = std::this_thread::get_id();
-		std::cout << "executed from thread: " << tid << std::endl;
+		//std::cout << "executed from thread: " << tid << std::endl;
 		return std::make_shared<testTaskRet_t>(tid);
 	};
 
@@ -104,7 +104,7 @@ int testTpNoFutures(size_t numThreads)
 		auto tid = std::this_thread::get_id();
 		{
 			std::unique_lock<std::mutex> mlock(m);
-			std::cout << "executed from thread: " << tid << std::endl;
+			//std::cout << "executed from thread: " << tid << std::endl;
 			tids.insert(tid);
 			cnt++;
 		}
@@ -122,6 +122,50 @@ int testTpNoFutures(size_t numThreads)
 
 	while (cnt != iterations)
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	tp.end();
+
+	if (tids.size() != numThreads)
+		std::cout << "tids.size " << tids.size() << " != numThreads " << numThreads << std::endl;
+
+	return static_cast<int>(numThreads) - static_cast<int>(tids.size());
+}
+int testTpWithExceptions()
+{
+	typedef concurency::threadPool<std::shared_ptr<testTaskRet_t>> tp_t;
+	tp_t tp;
+	const auto numThreads{2};
+	tp.start(numThreads);
+
+	std::set<std::thread::id> tids;
+	auto func = [&tids]() -> std::shared_ptr<testTaskRet_t> {
+		auto tid = std::this_thread::get_id();
+		tids.insert(tid);
+		//std::cout << "executed from thread: " << tid << std::endl;
+		throw std::logic_error{"test exception handling"};
+		//return std::make_shared<testTaskRet_t>(tid);
+	};
+
+	std::vector<std::future<std::shared_ptr<testTaskRet_t>>> futures;
+	for (size_t i = 0; i < 1024; ++i)
+	{
+		auto future = tp.push(func);
+		futures.push_back(std::move(future));
+	}
+	
+	for (auto& f : futures)
+	{
+		try
+		{
+			auto ptr = f.get();
+			std::cout << "error exception was not thrown: " << ptr->tid << std::endl;
+			return -1;
+		}
+		catch (const std::logic_error& /*ex*/)
+		{
+			
+		}
+	}
 
 	tp.end();
 
@@ -151,5 +195,9 @@ int main(int /*argc*/, char* /*argv*/[])
 		if (int res = testTpNoFutures<std::string>(i) != 0)
 			return res;
 	}
+
+	if (int res = testTpWithExceptions() != 0)
+		return res;
+
 	return 0;
 }
